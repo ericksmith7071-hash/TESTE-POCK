@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  backend:
+    build: ./pocket_robot
+    ports:
+      - "8000:8000"
+    environment:
+      - POCKET_SSID=${POCKET_SSID:-DEMO}
+    restart: unless-stopped
+
+  frontend:
+    build: ./external_prisma_repo
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    depends_on:
+      - backend

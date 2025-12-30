@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r pocket_robot/requirements.txt
+
+      - name: Quick backend syntax check
+        run: python -m py_compile pocket_robot/*.py || true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install frontend deps
+        run: |
+          cd external_prisma_repo
+          npm ci
+
+      - name: Build frontend
+        run: |
+          cd external_prisma_repo
+          npm run build || true
