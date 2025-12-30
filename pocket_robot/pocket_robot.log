@@ -1,0 +1,23 @@
+2025-12-30 18:53:23,149 - connection_monitor - INFO - Iniciando monitoramento de conexão...
+2025-12-30 18:53:24,150 - connection_monitor - INFO - Monitoramento iniciado (tempo de conexão: 1.001s)
+2025-12-30 18:53:24,150 - connection_monitor - INFO - Parando monitoramento de conexão...
+2025-12-30 18:53:24,151 - connection_monitor - INFO - Monitoramento parado
+2025-12-30 19:17:49,237 - main - INFO - 🚀 Inicializando Robô Pocket Option...
+2025-12-30 19:17:49,239 - connection_monitor - INFO - Iniciando monitoramento de conexão...
+2025-12-30 19:17:50,240 - connection_monitor - INFO - Monitoramento iniciado (tempo de conexão: 1.000s)
+2025-12-30 19:17:50,240 - main - INFO - ✅ Robô inicializado com sucesso!
+2025-12-30 19:17:50,240 - main - INFO - 📊 Iniciando monitoramento em tempo real...
+2025-12-30 19:17:50,240 - connection_monitor - INFO - Iniciando loop de monitoramento...
+2025-12-30 19:17:50,256 - main - INFO - 📈 Performance: {'uptime_minutes': 0.0, 'total_updates': 183, 'updates_per_minute': 183.0, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}
+2025-12-30 19:18:50,337 - main - INFO - 📈 Performance: {'uptime_minutes': 1.0, 'total_updates': 11163, 'updates_per_minute': 11147.94, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}
+2025-12-30 19:19:50,419 - main - INFO - 📈 Performance: {'uptime_minutes': 2.0, 'total_updates': 22143, 'updates_per_minute': 11056.46, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}
+2025-12-30 19:20:50,498 - main - INFO - 📈 Performance: {'uptime_minutes': 3.0, 'total_updates': 33123, 'updates_per_minute': 11026.18, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}
+2025-12-30 19:21:50,580 - main - INFO - 📈 Performance: {'uptime_minutes': 4.01, 'total_updates': 44103, 'updates_per_minute': 11010.87, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}
+2025-12-30 19:22:50,665 - main - INFO - 📈 Performance: {'uptime_minutes': 5.01, 'total_updates': 55083, 'updates_per_minute': 11001.61, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}
+2025-12-30 19:23:50,746 - main - INFO - 📈 Performance: {'uptime_minutes': 6.01, 'total_updates': 66063, 'updates_per_minute': 10995.54, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}
+2025-12-30 19:24:50,831 - main - INFO - 📈 Performance: {'uptime_minutes': 7.01, 'total_updates': 77043, 'updates_per_minute': 10991.1, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}
+2025-12-30 19:25:50,915 - main - INFO - 📈 Performance: {'uptime_minutes': 8.01, 'total_updates': 88023, 'updates_per_minute': 10987.8, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}
+2025-12-30 19:26:50,997 - main - INFO - 📈 Performance: {'uptime_minutes': 9.01, 'total_updates': 99003, 'updates_per_minute': 10985.25, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}
+2025-12-30 19:27:51,077 - main - INFO - 📈 Performance: {'uptime_minutes': 10.01, 'total_updates': 109983, 'updates_per_minute': 10983.27, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}
+2025-12-30 19:28:51,166 - main - INFO - 📈 Performance: {'uptime_minutes': 11.02, 'total_updates': 120963, 'updates_per_minute': 10981.5, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}
+2025-12-30 19:29:51,246 - main - INFO - 📈 Performance: {'uptime_minutes': 12.02, 'total_updates': 131943, 'updates_per_minute': 10980.15, 'successful_connections': 1, 'errors': 0, 'error_rate': 0.0}

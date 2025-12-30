@@ -1,0 +1,6 @@
+pydantic
+psutil
+fastapi
+uvicorn
+python-socketio
+aiofiles

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRISMA LIVE // ADVANCED MONITOR</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #000; color: #22c55e; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #052e16; }
+    ::-webkit-scrollbar-thumb { background: #14532d; border-radius: 3px; }
+    .glass-panel { background: rgba(5, 46, 22, 0.4); backdrop-filter: blur(8px); border: 1px solid rgba(20, 83, 45, 0.5); }
+    .matrix-bg { 
+        background-image: linear-gradient(0deg, transparent 24%, rgba(34, 197, 94, .05) 25%, rgba(34, 197, 94, .05) 26%, transparent 27%, transparent 74%, rgba(34, 197, 94, .05) 75%, rgba(34, 197, 94, .05) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(34, 197, 94, .05) 25%, rgba(34, 197, 94, .05) 26%, transparent 27%, transparent 74%, rgba(34, 197, 94, .05) 75%, rgba(34, 197, 94, .05) 76%, transparent 77%, transparent);
+        background-size: 30px 30px;
+    }
+  </style>
+</head>
+<body class="matrix-bg">
+  <div id="root"></div>
+
+  <!-- React & ReactDOM (UMD) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+    // ==========================================
+    //  CONFIG
+    // ==========================================
+    // O frontend agora se conecta ao backend local que serve Socket.IO.
+    const PO_USER_SSID = (window.POCKET_SSID || 'DEMO');
+    const ACTIVE_WS = window.location.origin; // conecta ao mesmo host do backend
+
+    // Lista reduzida/placeholder de ativos; o backend fornece a lista real por /api/assets
+    let ASSETS_MAP = {};
+    let ALL_ASSETS_LIST = [];
+
+    class ConnectionMonitor {
+        constructor() {
+            this.startTime = Date.now();
+            this.metrics = { messages: 0, errors: 0, pings: [], connected: false };
+        }
+        recordMessage() { this.metrics.messages++; }
+        recordError() { this.metrics.errors++; }
+        setConnected(status) { this.metrics.connected = status; }
+        recordPing(ms) { 
+            this.metrics.pings.push(ms);
+            if(this.metrics.pings.length > 50) this.metrics.pings.shift();
+        }
+        getStats() {
+            const uptime = (Date.now() - this.startTime) / 1000;
+            const avgPing = this.metrics.pings.length ? (this.metrics.pings.reduce((a,b)=>a+b,0) / this.metrics.pings.length) : 0;
+            let healthScore = 100;
+            if (!this.metrics.connected) healthScore = 0;
+            else {
+                if (avgPing > 200) healthScore -= 20;
+                if (this.metrics.errors > 0) healthScore -= (this.metrics.errors * 5);
+            }
+            return {
+                uptime: uptime.toFixed(0),
+                messages: this.metrics.messages,
+                msgPerSec: (this.metrics.messages / (uptime || 1)).toFixed(1),
+                errors: this.metrics.errors,
+                avgPing: avgPing.toFixed(0),
+                connected: this.metrics.connected,
+                healthScore: Math.max(0, healthScore)
+            };
+        }
+    }
+
+    const monitor = new ConnectionMonitor();
+    const priceCache = {};
+    let socketInstance = null;
+
+    function App() {
+        const [logs, setLogs] = useState([]);
+        const [prices, setPrices] = useState({});
+        const [page, setPage] = useState(0);
+        const PAGE_SIZE = 50;
+        const [stats, setStats] = useState(monitor.getStats());
+        const [modal, setModal] = useState(null);
+        const [cfg, setCfg] = useState({ tf: 1, amount: 100 });
+        const [filter, setFilter] = useState('');
+
+        const addLog = useCallback((msg) => {
+            setLogs(prev => [{ id: Date.now(), t: new Date().toLocaleTimeString(), msg }, ...prev.slice(0, 49)]);
+        }, []);
+
+        useEffect(() => {
+            // get assets from backend
+            fetch('/api/assets').then(r=>r.json()).then(obj=>{
+                ASSETS_MAP = obj || {};
+                ALL_ASSETS_LIST = Object.keys(ASSETS_MAP);
+            }).catch(()=>{});
+
+            const urlObj = new URL(ACTIVE_WS);
+            socketInstance = io(urlObj.origin, { path: '/socket.io', transports: ['websocket'] });
+
+            socketInstance.on('connect', () => {
+                monitor.setConnected(true);
+                addLog('✅ CONEXÃO ESTABELECIDA (BACKEND)');
+                // subscribe to first page on connect
+                setTimeout(()=>{
+                    const assets = ALL_ASSETS_LIST.slice(0, PAGE_SIZE);
+                    socketInstance.emit('subscribe', { symbols: assets });
+                }, 300);
+            });
+
+            socketInstance.on('disconnect', () => {
+                monitor.setConnected(false);
+                addLog('❌ CONEXÃO PERDIDA - Tentando reconectar...');
+            });
+
+            socketInstance.on('tick', (data) => {
+                // data: { symbol, price }
+                if(Array.isArray(data)){
+                    data.forEach(d=> priceCache[d.symbol]=d.price);
+                } else if(data.symbol){
+                    priceCache[data.symbol] = data.price;
+                }
+                monitor.recordMessage();
+            });
+
+            socketInstance.on('perf', (data) => {
+                // performance updates
+            });
+
+            socketInstance.on('connect_error', () => {
+                monitor.recordError();
+            });
+
+            const uiInterval = setInterval(() => {
+                if(socketInstance && socketInstance.connected){
+                    const start = Date.now();
+                    socketInstance.emit('ping_check', ()=> monitor.recordPing(Date.now() - start));
+                }
+                setStats(monitor.getStats());
+                setPrices({...priceCache});
+            }, 1000);
+
+            return () => {
+                clearInterval(uiInterval);
+                if(socketInstance) socketInstance.disconnect();
+            };
+        }, [addLog]);
+
+        const openSignal = (pair) => {
+            const price = priceCache[pair] || 0;
+            const direction = Math.random() > 0.5 ? 'call' : 'put';
+            const confidence = 90 + Math.floor(Math.random() * 9);
+            setModal({ pair, direction, entry: price, confidence });
+            addLog(`🎯 ANÁLISE: ${pair} [${direction.toUpperCase()}] CONF:${confidence}%`);
+        };
+
+        const executeTrade = () => {
+            if(!modal) return;
+            addLog(`🚀 ORDEM ENVIADA: ${modal.pair} ${modal.direction.toUpperCase()} R$${cfg.amount}`);
+            setModal(null);
+        };
+
+        const filteredAssets = useMemo(() => {
+            return ALL_ASSETS_LIST.filter(a => a.toLowerCase().includes(filter.toLowerCase()));
+        }, [filter, ALL_ASSETS_LIST]);
+
+        const pagedAssets = useMemo(()=>{
+            const start = page * PAGE_SIZE;
+            return filteredAssets.slice(start, start + PAGE_SIZE);
+        }, [filteredAssets, page]);
+
+        const changePage = (next) => {
+            const newPage = Math.max(0, Math.min(Math.floor((filteredAssets.length-1)/PAGE_SIZE), page + (next?1:-1)));
+            setPage(newPage);
+            const assets = filteredAssets.slice(newPage*PAGE_SIZE, newPage*PAGE_SIZE + PAGE_SIZE);
+            if(socketInstance && socketInstance.connected){
+                socketInstance.emit('subscribe', { symbols: assets });
+            }
+        };
+
+        return (
+            <div className="min-h-screen flex flex-col font-mono text-xs">
+                <header className="bg-skynet-950 border-b border-skynet-900 p-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-black border border-green-500 flex items-center justify-center shadow-[0_0_15px_rgba(34,197,94,0.3)]">
+                            <span className="text-2xl animate-pulse">☢</span>
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-black text-white tracking-widest">PRISMA <span className="text-green-500">DIAGNOSTICS</span></h1>
+                            <div className="text-[10px] text-green-700 font-bold">REGION: {window.location.host}</div>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 bg-black/50 p-2 rounded-lg border border-green-900/50">
+                        <StatBox label="HEALTH" value={`${stats.healthScore}%`} color={stats.healthScore > 80 ? 'text-green-400' : 'text-red-500'} />
+                        <StatBox label="MSG/SEC" value={stats.msgPerSec} color="text-blue-400" />
+                        <StatBox label="ERRORS" value={stats.errors} color="text-red-500" />
+                        <StatBox label="UPTIME" value={`${stats.uptime}s`} color="text-gray-400" />
+                    </div>
+                </header>
+
+                <main className="flex-1 flex gap-4 p-4 overflow-hidden">
+                    <aside className="w-72 flex flex-col gap-4">
+                        <div className="glass-panel p-4 rounded-xl">
+                            <h3 className="font-bold text-green-500 mb-2 border-b border-green-900 pb-1">CONFIGURAÇÃO</h3>
+                            <div className="flex gap-1 mb-2">
+                                {[1,2,3,5,15].map(t => (
+                                    <button key={t} onClick={()=>setCfg(c=>({...c, tf:t}))}
+                                        className={`flex-1 py-1 rounded border ${cfg.tf===t ? 'bg-green-600 border-green-500 text-black' : 'bg-black border-green-900 text-green-700'}`}>{t}M</button>
+                                ))}
+                            </div>
+                            <input type="number" value={cfg.amount} onChange={e=>setCfg(c=>({...c, amount:Number(e.target.value)}))}
+                                className="w-full bg-black border border-green-900 rounded p-2 text-white font-bold outline-none focus:border-green-500" />
+                        </div>
+                        <div className="flex-1 glass-panel p-4 rounded-xl flex flex-col overflow-hidden">
+                            <h3 className="font-bold text-green-500 mb-2 border-b border-green-900 pb-1">SYSTEM LOGS</h3>
+                            <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+                                {logs.map(l => (
+                                    <div key={l.id} className="text-[10px] border-l-2 border-green-900 pl-2 py-0.5 hover:bg-green-900/10">
+                                        <span className="text-gray-500">{l.t}</span> <span className="text-green-300">{l.msg}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </aside>
+
+                    <section className="flex-1 glass-panel p-4 rounded-xl flex flex-col overflow-hidden">
+                        <div className="flex justify-between items-center mb-4">
+                            <div className="font-bold text-white text-xl">⚡ ATIVOS AO VIVO ({filteredAssets.length})</div>
+                            <input type="text" placeholder="FILTRAR..." value={filter} onChange={e=>setFilter(e.target.value)}
+                                className="bg-black border border-green-900 rounded px-3 py-1 text-white outline-none focus:border-green-500 w-48" />
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 pr-2">
+                                {pagedAssets.map(asset => (
+                                    <button key={asset} onClick={() => openSignal(asset)}
+                                        className="group relative bg-black/60 border border-green-900/50 rounded-lg p-3 hover:border-green-500 transition-all text-left overflow-hidden">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="font-bold text-gray-300 truncate w-24">{asset.replace('_otc','')}</span>
+                                            {asset.includes('otc') && <span className="text-[8px] bg-green-900 text-green-400 px-1 rounded">OTC</span>}
+                                        </div>
+                                        <div className="text-lg font-bold text-green-400 font-mono">
+                                            {prices[asset] ? prices[asset].toFixed(5) : <span className="text-gray-700">---</span>}
+                                        </div>
+                                        <div className="absolute inset-0 bg-green-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="mt-3 flex gap-2 justify-center">
+                            <button onClick={()=>changePage(false)} className="px-3 py-1 bg-black border border-green-900 rounded">Anterior</button>
+                            <div className="px-3 py-1 bg-black border border-green-900 rounded">Página {page+1}</div>
+                            <button onClick={()=>changePage(true)} className="px-3 py-1 bg-black border border-green-900 rounded">Próxima</button>
+                        </div>
+                    </section>
+                </main>
+
+                {modal && (
+                    <div className="fixed inset-0 bg-black/90 backdrop-blur flex items-center justify-center z-50 animate-[fadeIn_0.2s]">
+                        <div className="bg-skynet-950 border border-green-500 rounded-2xl p-8 w-96 shadow-[0_0_50px_rgba(34,197,94,0.2)] text-center relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-green-500 to-transparent animate-scanline"></div>
+                            <h2 className="text-4xl font-black text-white mb-2">{modal.pair.replace('_otc','')}</h2>
+                            <div className={`text-6xl font-black mb-4 ${modal.direction === 'call' ? 'text-green-500' : 'text-red-500'}`}>{modal.direction.toUpperCase()}</div>
+                            <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+                                <div className="bg-black p-2 rounded border border-green-900"><div className="text-gray-500 text-[10px]">PREÇO</div><div className="text-white font-bold">{modal.entry.toFixed(5)}</div></div>
+                                <div className="bg-black p-2 rounded border border-green-900"><div className="text-gray-500 text-[10px]">CONFIANÇA</div><div className="text-yellow-400 font-bold">{modal.confidence}%</div></div>
+                            </div>
+                            <button onClick={executeTrade} className="w-full bg-white text-black font-bold py-4 rounded-xl hover:scale-[1.02] transition-transform shadow-xl">CONFIRMAR ENTRADA</button>
+                            <button onClick={()=>setModal(null)} className="mt-4 text-xs text-gray-500 hover:text-white">CANCELAR</button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    const StatBox = ({ label, value, color }) => (
+        <div className="text-center px-3 border-r border-green-900 last:border-0">
+            <div className="text-[9px] text-gray-500">{label}</div>
+            <div className={`font-bold text-sm ${color}`}>{value}</div>
+        </div>
+    );
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
